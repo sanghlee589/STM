@@ -1,0 +1,488 @@
+      SUBROUTINE ROUTE(QIN,QOUT,QOSTAR,STRLDN,KTRATO,AINF,BINF,
+     1    CINF,AINFTC,BINFTC,CINFTC,NPART,FRAC,FRCLY,FRSLT,FRSND,FRORG,
+     1    FALL,FRCFLW,NSLPTS,XINPUT,XU,XL,LOAD,ENRATO,TCF1,FIDEL,SAND,
+     1    SILT,CLAY,ORGMAT,EATA,TAUC,THETA,PHI,SLPLEN)
+C
+C     + + + PURPOSE + + +
+C     CALCULATES DETACHMENT (WHEN SHEAR STRESS EXCEEDS CRITICAL SHEAR
+C     STRESS) OR DEPOSITION AT THE UPPER END OF THE SLOPE SEGMENT AND
+C     ROUTES SEDIMENT THROUGH THE HILLSLOPE PROFILE.
+C
+C     CALLED FROM SUBROUTINE MAIN
+C     AUTHOR(S): D. FLANAGAN, M. NEARING, G. FOSTER
+C
+C     VERSION: THIS MODULE TAKEN LARGELY FROM WEPP V2004.7 CODE
+C     DATE LAST MODIFIED:  4-1-2005
+C     CODED BY: D. FLANAGAN
+C
+C     + + + PARAMETER DECLARATIONS + + +
+C
+      INTEGER MXPART, MXNSL, MXSLP
+      PARAMETER (MXPART = 10,MXNSL = 10,MXSLP = 40)
+C
+C     + + + ARGUMENT DECLARATIONS + + +
+      REAL QIN, QOUT, QOSTAR, STRLDN, KTRATO, AINF(MXSLP), BINF(MXSLP), 
+     1     CINF(MXSLP), AINFTC(MXSLP), BINFTC(MXSLP), CINFTC(MXSLP),
+     1     FRAC(MXPART), FRCLY(MXPART), FRSLT(MXPART), FRSND(MXPART),
+     1     FRORG(MXPART), FALL(MXPART), FRCFLW(MXPART), FIDEL(MXPART),
+     1     XINPUT(101), XU(MXSLP), XL(MXSLP), LOAD(101), ENRATO,
+     1     SAND(MXNSL), SILT(MXNSL), CLAY(MXNSL), ORGMAT(MXNSL),
+     1     EATA, TAUC, THETA, PHI, SLPLEN, TCF1(MXPART)
+      INTEGER NPART, NSLPTS
+C
+C     + + + ARGUMENT DEFINITIONS + + +
+C
+C     QIN     - FLOW DISCHARGE PER UNIT WIDTH (M^3/S*M) AT OFE TOP
+C     QOUT    - FLOW DISCHARGE PER UNIT WIDTH (M^3/S*M) AT OFE BOTTOM
+C     QOSTAR  - NONDIMENSIONAL INFLUX OF WATER ONTO TOP OF OFE
+C     STRLDN  - NONDIMENSIONAL SEDIMENT LOAD AT TOP OF CURRENT OFE
+C     KTRATO  - NONDIMENSIONAL SEDIMENT TRANSPORT CAPACITY RATIO
+C               (FROM NSERL REPORT 11 - EQUATION 11.3.6)
+C     AINF    - NONDIMENSIONAL SHEAR STRESS COEFFICIENT
+C     BINF    - NONDIMENSIONAL SHEAR STRESS COEFFICIENT
+C     CINF    - NONDIMENSIONAL SHEAR STRESS COEFFICIENT
+C     AINFTC  - NONDIMENSIONAL TRANSPORT COEFFICIENT
+C     BINFTC  - NONDIMENSIONAL TRANSPORT COEFFICIENT
+C     CINFTC  - NONDIMENSIONAL TRANSPORT COEFFICIENT
+C     FRAC    - FRACTION OF SEDIMENT IN EACH SIZE CLASS AT THE
+C               POINT OF INITIAL DETACHMENT
+C     FRCLY   - FRACTION OF CLAY IN EACH SEDIMENT SIZE CLASS
+C     FRSLT   - FRACTION OF SILT IN EACH SEDIMENT SIZE CLASS
+C     FRSND   - FRACTION OF SAND IN EACH SEDIMENT SIZE CLASS
+C     FRORG   - FRACTION OF ORGANIC MATTER IN EACH SEDIMENT SIZE CLASS
+C     FALL    - FALL VELOCITY OF EACH SEDIMENT SIZE CLASS (M/S)
+C     FRCFLW  - FRACTION OF SEDIMENT IN EACH SIZE CLASS AT SOME
+C               POINT IN THE RILL FLOW (REPORTED IN OUTPUT AT END
+C               OF HILLSLOPE.
+C     XINPUT  - DIMENSIONLESS DISTANCE AT POINTS DOWN SLOPE
+C     XU      - DIMENSIONLESS DISTANCE AT UPPER END OF CURRENT SECTION
+C     XL      - DIMENSIONLESS DISTANCE AT LOWER END OF CURRENT SECTION
+C     LOAD    - NONDIMENSIONAL SEDIMENT LOAD AT EACH POINT DOWN OFE
+C     FIDEL   - FRACTION OF EACH PARTICLE SIZE CLASS AFTER INTERRILL
+C               SORTING - CALCULATED IN PARAM.FOR
+C     TCF1    - FRACTION OF SEDIMENT TRANSPORT CAPACITY FOR EACH
+C               PARTICLE SIZE CLASS (COMPUTED IN YALIN.FOR)
+C     ENRATO  - ENRICHMENT RATIO OF THE SPECIFIC SURFACE AREA OF THE
+C               SEDIMENT.  A VALUE OF ENRATO IS COMPUTED AT THE END
+C               OF EVERY OFE FOR EACH STORM EVENT.
+C     NPART   - NUMBER OF PARTICLE SIZE CLASSES
+C     
+C
+C     + + + LOCAL VARIABLES + + +
+      REAL LDLAST, LOADUP, LDDEND, XDEND, XDBEG, XDETST, CDEP, DL, DU, 
+     1    XC1, XC2, TC(101), DETACH(101)
+      INTEGER I, IENDFG, ILAST, JJ, K, MSHEAR
+C
+C     LDLAST - N.D. SEDIMENT LOAD CALCULATED AT LAST POINT
+C     LOADUP - N.D. LOAD COMPUTED ENTERING DEPOSITION REGION - VALUE
+C              IS SENT AND USED IN SUBROUTINE ENRICH.F
+C     LDDEND - N.D. LOAD COMPUTED AT END OF PREVIOUS DEPOSITION
+C              REGION OR OVERLAND FLOW ELEMENT (I.E., LOAD AT XDETST)
+C     XDEND  - N.D. DISTANCE WHERE DEPOSITION COMPUTED TO END
+C     XDBEG  - N.D. DISTANCE WHERE DEPOSITION BEGINS ON A SEGMENT
+C     XDETST - N.D. DISTANCE AT START OF PREVIOUS DETACHMENT AREA
+C     ILAST  - COUNTER INDEX VARIABLE AT LAST POINT
+C     IENDFG - FLAG TO SUBROUTINE ENRICH.F INDICATING LAST CALL AT
+C              END OF AN OVERLAND FLOW ELEMENT
+C     DL     - N.D. DEPOSITION RATE
+C     DU     - N.D. DEPOSITION RATE AT THE TOP OF A SEGMENT
+C     CDEP   - PORTION OF SOLUTION TO DEPOSITION EQUATION
+C     ERD    - N.D. RILL ERODIBILITY PARAMETER SENT TO EROD.F
+C              IF SHEAR < CRITICAL ERD=0, OTHERWISE ERD=EATA
+C     MSHEAR - FLAG INDICATING WHAT SHEAR CONDITIONS EXIST ON SEGMENT
+C
+C     + + + SUBROUTINES CALLED + + +
+C     XCRIT
+C     DEPOS
+C     EROD
+C
+C     + + + FUNCTION DECLARATIONS + + +
+      REAL DEPC
+      REAL DEPEND
+C
+C     + + + END SPECIFICATIONS + + +
+C
+C
+C*********************************************************************
+C
+C ... INITIALIZE EROSION VARIABLES AT THE TOP OF AN OFE.
+C
+      LDDEND = STRLDN
+      LDLAST = STRLDN
+      ILAST = 1
+      NDEP = 0
+      IENDFG = 0
+      XDBEG = 0.0
+      XDETST = 0.0
+C     
+C     ... SET SEDIMENT LOADS AND TRANSPORT CAPACITY AT EACH POINT,
+C     EQUAL TO ZERO.
+C     
+      DO 10 JJ = 1, 101
+         LOAD(JJ) = 0.0
+         TC(JJ) = 0.0
+   10 CONTINUE
+C     
+C     ... SET DISTANCE, TRANSPORT CAPACITY, AND SEDIMENT LOAD AT
+C     FIRST POINT ON OFE.
+C     
+      XU(2) = 0.0
+      TC(1) = CINFTC(2) * KTRATO
+      LOAD(1) = STRLDN
+C     
+C     ... INITIALIZE PARTICLE FRACTIONS IN THE FLOW AT TOP OF OFE
+C     WITH NO INFLOW FROM PREVIOUS OFE.
+C     
+      IF (QOUT.GT.0.0) THEN
+         IF (QIN.LE.0.0) THEN
+            DO 20 I = 1, NPART
+               FRCFLW(I) = FRAC(I)
+   20       CONTINUE
+         ELSE
+C           
+C           INITIALIZE PARTICLE FRACTIONS IN THE FLOW FOR OFE'S
+C           WITH INFLOW FROM PREVIOUS OFE.
+C           NOTE - CHANGING TO A SINGLE FLOW ELEMENT REQUIRES
+C           THE FRACTIONS IN FLOW FROM PREVIOUS ELEMENT TO BE
+C           READ IN AS INPUT.  DCF - 4/1/2005
+C
+            READ(7,*) (FRCFLW(I),I = 1, NPART)
+         END IF
+      ELSE
+         DO 40 I = 1, NPART
+            FRCFLW(I) = 0.0
+   40    CONTINUE
+      END IF
+C     
+C******************************************************************
+C     UPPER BOUNDARY CONDITION FOR OVERLAND FLOW ELEMENTS
+C     
+C     DETERMINE IF DEPOSITION IS OCCURING AT X=0 ON OFE.
+C     IF QOSTAR = 0.0 (NO INFLOW) ESTIMATE DL FROM DEPOSITION EQUATION
+C     ELSE, ESTIMATE DL FROM THE INCOMING SEDIMENT LOAD AND FLOW RATE
+C     
+      IF (ABS(QOSTAR).LT..0011) THEN
+         DL = PHI / (PHI+1.0) * (KTRATO*BINFTC(2)-THETA)
+      ELSE
+         DL = PHI / QOSTAR * (KTRATO*CINFTC(2)-LDLAST)
+      END IF
+C     
+C     
+C     **************************************************************
+C     *** FOR EACH SLOPE SEGMENT WITHIN AN OVERLAND FLOW ELEMENT ***
+C     **************************************************************
+C     PERFORM DETACHMENT AND DEPOSITION CALCULATIONS.
+C     
+C     *** START OF BIG DO-LOOP ***
+C     
+      DO 170 K = 2, NSLPTS
+C        
+C        FOR A CASE 4 PLANE - BYPASS ALL CALCULATIONS IF FLOW
+C        HAS ENDED BEFORE CURRENT SEGMENT
+C        *** START OF BIG IF ***
+         IF (QOUT.GT.0.0.OR.XU(K).LT.-QOSTAR) THEN
+C           
+C           IF A CASE 2 OR 3 PLANE, OR A CASE 4 PLANE SEGMENT
+C           ON WHICH RUNOFF DOES NOT END.
+            IF (QOUT.GT.0.0.OR.(QOUT.LE.0.0.AND.XL(K).LT.-QOSTAR))THEN
+C              
+C              CALCULATE SHEAR CONDITIONS IN SEGMENT, THEN
+C              FIND WHERE SHEAR EQUALS CRITICAL SHEAR FOR SEGMENT.
+               CALL XCRIT(AINF(K),BINF(K),CINF(K),TAUC,XU(K),
+     1              XL(K),XC1,XC2,MSHEAR)
+C           
+C           ELSE FOR A CASE 4 PLANE SEGMENT ON WHICH THE FLOW ENDS
+            ELSE
+               CALL XCRIT(AINF(K),BINF(K),CINF(K),TAUC,XU(K),
+     1             -QOSTAR,XC1,XC2,MSHEAR)
+            END IF
+C           
+C           DETERMINE IF THERE IS DEPOSITION AT THE BEGINNING OF THE
+C           SEGMENT - IF THERE IS - CALCULATE WHERE DEPOSITION ENDS
+C           
+            DU = DL
+C           
+C           *** L1 IF ***
+            IF (DU.LT.0.) THEN
+C              
+C              DEPOSITION AT UPPER END OF SEGMENT
+C              
+               CDEP = DEPC(XU(K),AINFTC(K),BINFTC(K),PHI,THETA,
+     1             DU,KTRATO,QOSTAR)
+C              
+C              CHECK FOR DEPOSITION ENDING WITHIN SEGMENT
+C              
+               XDEND = DEPEND(XU(K),XL(K),AINFTC(K),
+     1             BINFTC(K),CDEP,PHI,THETA,KTRATO,QOSTAR)
+C              
+C              DEPOSITION DOES NOT END
+C              
+C              *** L2 IF ***
+               IF (XDEND.GE.XL(K)) THEN
+                  XDEND = XL(K)
+C                 
+                  LOADUP = LDLAST
+                  CALL DEPOS(XU(K),XDEND,CDEP,AINFTC(K),
+     1                BINFTC(K),CINFTC(K),PHI,THETA,ILAST,DL,LDLAST,
+     1                XINPUT,KTRATO,DETACH,LOAD,TC,QOSTAR)
+                  NDEP = 0
+                  IF (LDLAST.GT.0.0.AND.QOUT.GT.0.0) THEN
+                     CALL ENRICH(K,XU(K),XDEND,XDETST,LOADUP,
+     1                   LDLAST,LDDEND,THETA,IENDFG,SLPLEN,KTRATO,QIN,
+     1                   QOUT,QOSTAR,AINFTC,BINFTC,CINFTC,NPART,FRAC,
+     1                   FALL,FRCLY,FRSLT,FRSND,FRORG,SAND,SILT,CLAY,
+     1                   ORGMAT,FIDEL,TCF1,FRCFLW,ENRATO)
+                     LDDEND = LDLAST
+                     XDETST = XDEND
+                  END IF
+C              *** L2 ELSE ***
+               ELSE
+C                 
+C                 DEPOSITION ENDS IN SEGMENT
+C                 
+                  LOADUP = LDLAST
+                  CALL DEPOS(XU(K),XDEND,CDEP,AINFTC(K),
+     1                BINFTC(K),CINFTC(K),PHI,THETA,ILAST,DL,LDLAST,
+     1                XINPUT,KTRATO,DETACH,LOAD,TC,QOSTAR)
+                  NDEP = 0
+                  IF (LDLAST.GT.0.0.AND.QOUT.GT.0.0) THEN
+                     CALL ENRICH(K,XU(K),XDEND,XDETST,LOADUP,
+     1                   LDLAST,LDDEND,THETA,IENDFG,SLPLEN,KTRATO,QIN,
+     1                   QOUT,QOSTAR,AINFTC,BINFTC,CINFTC,NPART,FRAC,
+     1                   FALL,FRCLY,FRSLT,FRSND,FRORG,SAND,SILT,CLAY,
+     1                   ORGMAT,FIDEL,TCF1,FRCFLW,ENRATO)
+                     LDDEND = LDLAST
+                     XDETST = XDEND
+                  END IF
+C                 
+C                 
+C                 DETACHMENT AFTER DEPOSITION
+C                 
+C                 
+                  GO TO (50,60,70,80,90)MSHEAR
+C                 
+C                 SHEAR BELOW CRITICAL IN ENTIRE SEGMENT.
+C                 ** MSHEAR = 1 **
+   50             CONTINUE
+                  CALL EROD(XDEND,XL(K),AINF(K),BINF(K),CINF(K),
+     1                AINFTC(K),BINFTC(K),CINFTC(K),0.0,TAUC,THETA,PHI,
+     1                ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,LOAD,TC,
+     1                DETACH,QOSTAR)
+                  GO TO 100
+C                 
+C                 SHEAR EXCEEDS CRITICAL IN ENTIRE SEGMENT.
+C                 ** MSHEAR = 2 **
+   60             CONTINUE
+                  CALL EROD(XDEND,XL(K),AINF(K),BINF(K),CINF(K),
+     1                AINFTC(K),BINFTC(K),CINFTC(K),EATA,TAUC,THETA,PHI,
+     1                ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,LOAD,TC,
+     1                DETACH,QOSTAR)
+                  GO TO 100
+C                 
+C                 SHEAR INCREASES DOWNSLOPE AND EXCEEDS CRITICAL AT X=XC1.
+C                 ** MSHEAR = 3 **
+   70             CONTINUE
+                  IF (XDEND.LE.XC1) THEN
+                     CALL EROD(XDEND,XC1,AINF(K),BINF(K),CINF(K),
+     1                   AINFTC(K),BINFTC(K),CINFTC(K),0.0,TAUC,THETA,
+     1                   PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,
+     1                   LOAD,TC,DETACH,QOSTAR)
+                     IF (NDEP.EQ.0) CALL EROD(XC1,XL(K),AINF(K),
+     1                   BINF(K),CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),
+     1                   EATA,TAUC,THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,
+     1                   XINPUT,KTRATO,LOAD,TC,DETACH,QOSTAR)
+                  ELSE
+                     CALL EROD(XDEND,XL(K),AINF(K),BINF(K),
+     1                   CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),EATA,
+     1                   TAUC,THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,
+     1                   XINPUT,KTRATO,LOAD,TC,DETACH,QOSTAR)
+                  END IF
+                  GO TO 100
+C                 
+C                 SHEAR DECREASES DOWNSLOPE AND DROPS BELOW
+C                 CRITICAL AT X=XC1.
+C                 ** MSHEAR = 4 **
+   80             CONTINUE
+                  IF (XDEND.LE.XC1) THEN
+                     CALL EROD(XDEND,XC1,AINF(K),BINF(K),CINF(K),
+     1                   AINFTC(K),BINFTC(K),CINFTC(K),EATA,TAUC,THETA,
+     1                   PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,
+     1                   LOAD,TC,DETACH,QOSTAR)
+                     IF (NDEP.EQ.0) CALL EROD(XC1,XL(K),AINF(K),
+     1                   BINF(K),CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),
+     1                   0.0,TAUC,THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,
+     1                   XINPUT,KTRATO,LOAD,TC,DETACH,QOSTAR)
+                  ELSE
+                     CALL EROD(XDEND,XL(K),AINF(K),BINF(K),
+     1                   CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),0.0,TAUC,
+     1                   THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,
+     1                   KTRATO,LOAD,TC,DETACH,QOSTAR)
+                  END IF
+                  GO TO 100
+C                 
+C                 SHEAR INCREASES DOWN SLOPE -- EXCEEDS CRITICAL AT X=XC1,
+C                 THEN DECREASES FROM XC1 TO XC2, AND DROPS BELOW CRITICAL
+C                 AT XC2.
+C                 ** MSHEAR = 5 **
+   90             CONTINUE
+                  IF (XDEND.LE.XC1) THEN
+                     CALL EROD(XDEND,XC1,AINF(K),BINF(K),CINF(K),
+     1                   AINFTC(K),BINFTC(K),CINFTC(K),0.0,TAUC,THETA,
+     1                   PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,
+     1                   LOAD,TC,DETACH,QOSTAR)
+                     IF (NDEP.EQ.0) THEN
+                        CALL EROD(XC1,XC2,AINF(K),BINF(K),CINF(K),
+     1                      AINFTC(K),BINFTC(K),CINFTC(K),EATA,TAUC,
+     1                      THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,
+     1                      KTRATO,LOAD,TC,DETACH,QOSTAR)
+                        IF (NDEP.EQ.0) CALL EROD(XC2,XL(K),
+     1                      AINF(K),BINF(K),CINF(K),AINFTC(K),
+     1                      BINFTC(K),CINFTC(K),0.0,TAUC,THETA,PHI,
+     1                      ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,
+     1                      LOAD,TC,DETACH,QOSTAR)
+                     END IF
+                  ELSE IF (XDEND.GT.XC2) THEN
+                     CALL EROD(XDEND,XL(K),AINF(K),BINF(K),
+     1                   CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),0.0,TAUC,
+     1                   THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,
+     1                   KTRATO,LOAD,TC,DETACH,QOSTAR)
+                  ELSE
+                     CALL EROD(XDEND,XC2,AINF(K),BINF(K),CINF(K),
+     1                   AINFTC(K),BINFTC(K),CINFTC(K),EATA,TAUC,THETA,
+     1                   PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,
+     1                   LOAD,TC,DETACH,QOSTAR)
+                     IF (NDEP.EQ.0) CALL EROD(XC2,XL(K),AINF(K),
+     1                   BINF(K),CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),
+     1                   0.0,TAUC,THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,
+     1                   XINPUT,KTRATO,LOAD,TC,DETACH,QOSTAR)
+                  END IF
+  100             CONTINUE
+C              *** L2 ENDIF ***
+               END IF
+C           
+C           DETACHMENT AT UPPER END OF SEGMENT
+C           
+C           *** L1 ELSE ***
+            ELSE
+C              
+               DL = 0.0
+               DU = 0.0
+C              
+               GO TO (110,120,130,140,150)MSHEAR
+C              
+C              SHEAR BELOW CRITICAL IN ENTIRE SEGMENT.
+C              ** MSHEAR = 1 **
+  110          CONTINUE
+               CALL EROD(XU(K),XL(K),AINF(K),BINF(K),
+     1             CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),0.0,TAUC,THETA,
+     1             PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,LOAD,TC,
+     1             DETACH,QOSTAR)
+               GO TO 160
+C              
+C              SHEAR EXCEEDS CRITICAL IN ENTIRE SEGMENT.
+C              ** MSHEAR = 2 **
+  120          CONTINUE
+               CALL EROD(XU(K),XL(K),AINF(K),BINF(K),
+     1             CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),EATA,TAUC,
+     1             THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,
+     1             LOAD,TC,DETACH,QOSTAR)
+               GO TO 160
+C              
+C              SHEAR INCREASES DOWNSLOPE AND EXCEEDS CRITICAL AT X=XC1.
+C              ** MSHEAR = 3 **
+  130          CONTINUE
+               CALL EROD(XU(K),XC1,AINF(K),BINF(K),CINF(K),
+     1             AINFTC(K),BINFTC(K),CINFTC(K),0.0,TAUC,THETA,PHI,
+     1             ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,LOAD,TC,
+     1             DETACH,QOSTAR)
+               IF (NDEP.EQ.0) CALL EROD(XC1,XL(K),AINF(K),
+     1             BINF(K),CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),EATA,
+     1             TAUC,THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,
+     1             KTRATO,LOAD,TC,DETACH,QOSTAR)
+               GO TO 160
+C              
+C              SHEAR DECREASES DOWNSLOPE AND DROPS BELOW CRITICAL AT X=XC1.
+C              ** MSHEAR = 4 **
+  140          CONTINUE
+               CALL EROD(XU(K),XC1,AINF(K),BINF(K),CINF(K),
+     1             AINFTC(K),BINFTC(K),CINFTC(K),EATA,TAUC,THETA,PHI,
+     1             ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,LOAD,TC,
+     1             DETACH,QOSTAR)
+               IF (NDEP.EQ.0) CALL EROD(XC1,XL(K),AINF(K),
+     1             BINF(K),CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),0.0,
+     1             TAUC,THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,
+     1             KTRATO,LOAD,TC,DETACH,QOSTAR)
+               GO TO 160
+C              
+C              SHEAR INCREASES DOWN SLOPE -- EXCEEDS CRITICAL AT X=XC1,
+C              THEN DECREASES FROM XC1 TO XC2, AND DROPS BELOW CRITICAL
+C              AT XC2.
+C              ** MSHEAR = 5 **
+  150          CONTINUE
+               CALL EROD(XU(K),XC1,AINF(K),BINF(K),CINF(K),
+     1             AINFTC(K),BINFTC(K),CINFTC(K),0.0,TAUC,THETA,PHI,
+     1             ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,KTRATO,LOAD,TC,
+     1             DETACH,QOSTAR)
+               IF (NDEP.EQ.0) THEN
+                  CALL EROD(XC1,XC2,AINF(K),BINF(K),CINF(K),AINFTC(K),
+     1                BINFTC(K),CINFTC(K),EATA,TAUC,THETA,PHI,ILAST,DL,
+     1                LDLAST,XDBEG,NDEP,XINPUT,KTRATO,LOAD,TC,DETACH,
+     1                QOSTAR)
+                  IF (NDEP.EQ.0) CALL EROD(XC2,XL(K),AINF(K),
+     1                BINF(K),CINF(K),AINFTC(K),BINFTC(K),CINFTC(K),0.0,
+     1                TAUC,THETA,PHI,ILAST,DL,LDLAST,XDBEG,NDEP,XINPUT,
+     1                KTRATO,LOAD,TC,DETACH,QOSTAR)
+               END IF
+C           
+C           *** L1 ENDIF ***
+            END IF
+C           
+  160       CONTINUE
+C           
+C           IF THIS WAS A DETACHMENT SECTION ON THE SEGMENT OF THE
+C           OFE WHICH WENT INTO DEPOSITION (NDEP = 1) THEN CALL
+C           THE DEPOSITION ROUTINE FROM THE POINT WHERE LOAD EQUALS
+C           TRANSPORT CAPACITY TO THE END OF THE SEGMENT.
+C           
+            IF (NDEP.NE.0) THEN
+               IF (ILAST.LT.102) THEN
+                  DL = 0.0
+                  DU = 0.0
+                  CDEP = DEPC(XDBEG,AINFTC(K),BINFTC(K),PHI,THETA,DU,
+     1                KTRATO,QOSTAR)
+                  LOADUP = LDLAST
+                  IF (LOADUP.LT.LDDEND) LOADUP = LDDEND
+                  CALL DEPOS(XDBEG,XL(K),CDEP,AINFTC(K),
+     1                BINFTC(K),CINFTC(K),PHI,THETA,ILAST,DL,LDLAST,
+     1                XINPUT,KTRATO,DETACH,LOAD,TC,QOSTAR)
+                  NDEP = 0
+                  IF (LDLAST.GT.0.0.AND.QOUT.GT.0.0) THEN
+                     CALL ENRICH(K,XDBEG,XL(K),XDETST,LOADUP,
+     1                   LDLAST,LDDEND,THETA,IENDFG,SLPLEN,KTRATO,QIN,
+     1                   QOUT,QOSTAR,AINFTC,BINFTC,CINFTC,NPART,FRAC,
+     1                   FALL,FRCLY,FRSLT,FRSND,FRORG,SAND,SILT,CLAY,
+     1                   ORGMAT,FIDEL,TCF1,FRCFLW,ENRATO)
+                     LDDEND = LDLAST
+                     XDETST = XL(K)
+                  END IF
+               END IF
+            END IF
+C        
+C        END OF BIG IF
+         END IF
+C     
+C     END OF BIG DO-LOOP
+  170 CONTINUE
+C     
+C     COMPUTE ENRICHMENT RATIO AT THE END OF EACH
+C     OVERLAND FLOW ELEMENT.
+C     
+      IENDFG = 1
+C     
+      CALL ENRICH(K,1.0,1.0,XDETST,LDLAST,LDLAST,LDDEND,THETA,IENDFG,
+     1    SLPLEN,KTRATO,QIN,QOUT,QOSTAR,AINFTC,BINFTC,CINFTC,NPART,FRAC,
+     1    FALL,FRCLY,FRSLT,FRSND,FRORG,SAND,SILT,CLAY,ORGMAT,FIDEL,
+     1    TCF1,FRCFLW,ENRATO)
+C     
+      RETURN
+      END

@@ -1,0 +1,235 @@
+      SUBROUTINE RUNGE(A,B,C,ATC,BTC,CTC,EATA,TAUC,THETA,DX,X,LDOLD,
+     1    LDNEW,XX,EATAX,TAUCX,SHR,DCAP,KTRATO)
+C
+C     SUBROUTINE RUNGE PERFORMS RUNGE-KUTTA ITERATION
+C
+C     MODULE ADAPTED FROM WEPP VERSION 2004.7 AND CALLED FROM 
+C     SUBROUTINE EROD
+C
+C     AUTHOR(S): D.C. FLANAGAN AND J.C. ASCOUGH II
+C     DATE LAST MODIFIED: 9-30-2004
+C
+C     + + + ARGUMENT DECLARATIONS + + +
+C
+      REAL ATC, BTC, CTC, A, B, C, EATA, TAUC, THETA, DX, X, LDOLD
+      REAL LDNEW, XX, EATAX, TAUCX, SHR, DCAP, KTRATO
+C
+C     + + + ARGUMENT DEFINITIONS + + +
+C
+C     A      - SHEAR STRESS EQUATION COEFFICIENT
+C     B      - SHEAR STRESS EQUATION COEFFICIENT
+C     C      - SHEAR STRESS EQUATION COEFFICIENT
+C     EATA   - N.D. RILL ERODIBILITY PARAMETER
+C     TAUC   - N.D. CRITICAL SHEAR STRESS PARAMETER
+C     THETA  - N.D. INTERRILL ERODIBILITY PARAMETER
+C     DX     -
+C     X      -
+C     LDOLD  - N.D. SEDIMENT LOAD CALCULATED AT I=ILAST
+C              DETACHMENT SEGMENT
+C     LDNEW  -
+C     XX     - N.D. DISTANCE AT LAST POINT CALCULATED
+C     EATAX  - EATA VALUE AT LAST POINT
+C     TAUCX  - TAUC VALUE AT LAST POINT
+C     SHR    - N.D. SHEAR STRESS VALUE AT LAST POINT 
+C     DCAP   - N.D. DETACHMENT CAPACITY VALUE AT LAST POINT
+C     KTRATO - DIMENSIONLESS SED. TRANSPORT EQUATION COEFFICIENT
+C
+C
+C     + + + SAVES + + +
+C
+C     SAVE XX,EATAX,TAUCX,SHR,DCAP
+C
+C     + + + LOCAL VARIABLES + + +
+C
+      REAL LDRK, K1, K2, K3, K4, TMPVR, TCAP, XRK, XTERM, XTRMTC
+C
+C     + + + LOCAL VARIABLE DEFINITIONS + + +
+C
+C     XRK   -
+C     LDRK  -
+C     TCAP  - UNIFORM SLOPE
+C     K1    - \
+C     K2    -  \
+C     K3    -   > CONSTANTS USED TO COMPUTE LDNEW
+C     K4    -  /
+C
+C     BEGIN SUBROUTINE RUNGE
+C
+C     COMPUTE K1 CONSTANT
+C
+      XRK = X
+      LDRK = LDOLD
+C     
+      XTERM = A * XRK ** 2 + B * XRK + C
+      XTRMTC = ATC * XRK ** 2 + BTC * XRK + CTC
+C     
+      IF (XTERM.NE.XX) THEN
+C        
+C        UPDATE SHR AND SAVE XTERM
+C        
+         IF (XTERM.GT.0.0) THEN
+            SHR = EXP(0.666667*LOG(XTERM))
+         ELSE
+            SHR = 0.0
+         END IF
+C        
+         XX = XTERM
+C        
+C        UPDATE DCAP AND SAVE EATA AND TAUC
+C        
+         DCAP = EATA * (SHR-TAUC)
+         IF (DCAP.LT.0.0) DCAP = 0.0
+         EATAX = EATA
+         TAUCX = TAUC
+C     
+      ELSE IF (EATAX.NE.EATA.OR.TAUCX.NE.TAUC) THEN
+C        
+C        UPDATE DCAP AND SAVE EATA AND TAUC
+C        
+         DCAP = EATA * (SHR-TAUC)
+         IF (DCAP.LT.0.0) DCAP = 0.0
+         EATAX = EATA
+         TAUCX = TAUC
+      END IF
+C     
+      TCAP = XTRMTC * KTRATO
+      IF (TCAP.LT.0.0) TCAP = 0.0
+C     
+      IF (TCAP.GT.0.0) THEN
+         TMPVR = DCAP * ((TCAP-LDRK)/TCAP) + THETA
+      ELSE
+         TMPVR = THETA
+      END IF
+C     
+      K1 = DX * TMPVR
+C     
+C     COMPUTE K2 CONSTANT
+C     
+      XRK = X + DX / 2.0
+      LDRK = LDOLD + 0.5 * K1
+C     
+      XTERM = A * XRK ** 2 + B * XRK + C
+      XTRMTC = ATC * XRK ** 2 + BTC * XRK + CTC
+C     
+      IF (XTERM.NE.XX) THEN
+C        
+C        UPDATE SHR AND SAVE XTERM
+C        
+         IF (XTERM.GT.0.0) THEN
+            SHR = EXP(0.666667*LOG(XTERM))
+         ELSE
+            SHR = 0.0
+         END IF
+C        
+         XX = XTERM
+C        
+C        UPDATE DCAP AND SAVE EATA AND TAUC
+C        
+         DCAP = EATA * (SHR-TAUC)
+         IF (DCAP.LT.0.0) DCAP = 0.0
+         EATAX = EATA
+         TAUCX = TAUC
+C     
+      ELSE IF (EATAX.NE.EATA.OR.TAUCX.NE.TAUC) THEN
+C        
+C        UPDATE DCAP AND SAVE EATA AND TAUC
+C        
+         DCAP = EATA * (SHR-TAUC)
+         IF (DCAP.LT.0.0) DCAP = 0.0
+         EATAX = EATA
+         TAUCX = TAUC
+      END IF
+C     
+      TCAP = XTRMTC * KTRATO
+      IF (TCAP.LT.0.0) TCAP = 0.0
+C     
+      IF (TCAP.GT.0.0) THEN
+         TMPVR = DCAP * ((TCAP-LDRK)/TCAP) + THETA
+      ELSE
+         TMPVR = THETA
+      END IF
+C     
+      K2 = DX * TMPVR
+C     
+C     COMPUTE K3 CONSTANT
+C     
+      LDRK = LDOLD + 0.5 * K2
+C     
+      IF (TCAP.GT.0.0) THEN
+         TMPVR = DCAP * ((TCAP-LDRK)/TCAP) + THETA
+      ELSE
+         TMPVR = THETA
+      END IF
+C     
+      K3 = DX * TMPVR
+C     
+C     COMPUTE K4 CONSTANT
+C     
+      XRK = X + DX
+      LDRK = LDOLD + K3
+C     
+      XTERM = A * XRK ** 2 + B * XRK + C
+      XTRMTC = ATC * XRK ** 2 + BTC * XRK + CTC
+C     
+      IF (XTERM.NE.XX) THEN
+C        
+C        UPDATE SHR AND SAVE XTERM
+C        
+         IF (XTERM.GT.0.0) THEN
+            SHR = EXP(0.666667*LOG(XTERM))
+         ELSE
+            SHR = 0.0
+         END IF
+C        
+         XX = XTERM
+C        
+C        UPDATE DCAP AND SAVE EATA AND TAUC
+C        
+         DCAP = EATA * (SHR-TAUC)
+         IF (DCAP.LT.0.0) DCAP = 0.0
+         EATAX = EATA
+         TAUCX = TAUC
+C     
+      ELSE IF (EATAX.NE.EATA.OR.TAUCX.NE.TAUC) THEN
+C        
+C        UPDATE DCAP AND SAVE EATA AND TAUC
+C        
+         DCAP = EATA * (SHR-TAUC)
+         IF (DCAP.LT.0.0) DCAP = 0.0
+         EATAX = EATA
+         TAUCX = TAUC
+      END IF
+C     
+      TCAP = XTRMTC * KTRATO
+C     
+      IF (TCAP.GT.0.0) THEN
+         TMPVR = DCAP * ((TCAP-LDRK)/TCAP) + THETA
+      ELSE
+         TMPVR = THETA
+      END IF
+C     
+      K4 = DX * TMPVR
+C     
+      LDNEW = LDOLD + (K1+2.0*K2+2.0*K3+K4) / 6.0
+C     
+C     ADD CHECK TO PREVENT USE OF NEGATIVE SEDIMENT LOADS IF
+C     THEY ARE PREDICTED BY RUNGE-KUTTA METHOD BECAUSE THE
+C     STEP SIZE (X DIMENSION) IS TOO LARGE
+C     
+C     A BETTER SOLUTION IS NEEDED IN WHICH THE ROUTINE WILL CHECK 
+C     AND REDO THE COMPUTATIONS USING A SMALLER "DX" VALUE SHOULD 
+C     NEGATIVE VALUES OF THE "K1", "K2", "K3", AND "K4" TEST LOADS BE
+C     COMPUTED
+C     
+C     FOR NOW, CHECK TO SEE IF THE NEW LOAD PREDICTED IS LESS THAN 
+C     THE OLD LOAD PLUS THE INTERRILL CONTRIBUTION ACROSS THE "DX" 
+C     DISTANCE - IF IT IS THEN SET THE NEW LOAD EQUAL TO THIS SUM
+C     
+      LDTEST = LDOLD + THETA * DX
+C     
+      IF (LDNEW.LT.LDTEST) THEN
+         LDNEW = LDTEST
+      END IF
+C     
+      RETURN
+      END

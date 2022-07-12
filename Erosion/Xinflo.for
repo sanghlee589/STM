@@ -1,0 +1,83 @@
+      SUBROUTINE XINFLO(XINPUT,EFFLEN,SLPLEN,A,B,QIN,QOUT,PEAKRO,
+     1    QOSTAR,AINF,BINF,CINF,AINFTC,BINFTC,CINFTC,QSHEAR,RSPACE,
+     1    NSLPTS)
+C
+C     SUBROUTINE XINFLO CONTROLS THE VARIABLES AFFECTED BY THE
+C     RUNOFF BOTH LEAVING AND ENTERING THE FLOW PLANE
+C
+C     MODULE ADAPTED FROM WEPP VERSION 2004.7 AND CALLED FROM THE
+C     MAIN PROGRAM
+C
+C     AUTHOR(S): D.C FLANAGAN AND J.C. ASCOUGH II
+C     DATE LAST MODIFIED: 4-1-2005
+C
+C     + + + PARAMETER DECLARATIONS + + +
+C
+      INTEGER MXSLP
+      PARAMETER (MXSLP = 40)
+C
+C     + + + ARGUMENT DECLARATIONS + + +
+C
+      REAL XINPUT(101), EFFLEN, SLPLEN, A(MXSLP), B(MXSLP), QIN, QOUT,
+     1     PEAKRO, QOSTAR, AINF(MXSLP), BINF(MXSLP), CINF(MXSLP),
+     1     AINFTC(MXSLP), BINFTC(MXSLP), CINFTC(MXSLP), QSHEAR, RSPACE
+      INTEGER NSLPTS
+C
+C     + + + ARGUMENT DEFINITIONS + + +
+C
+C     BEGIN SUBROUTINE XINFLO
+C
+      DO I = 2, 101
+         XINPUT(I) = FLOAT(I-1) * .01
+      END DO
+C
+      QIN = QOUT
+      QOUT = PEAKRO * EFFLEN
+      DEL = QOUT - QIN
+C     
+      IF (QOUT.LE.0.0) THEN
+         QOSTAR = -EFFLEN / SLPLEN
+      ELSE IF (ABS(DEL).GT.1.0E-10) THEN
+         IF (QIN.LE.0.0) THEN
+            QOSTAR = 0.0
+         ELSE
+            QOSTAR = QIN / DEL
+         END IF
+      ELSE
+         IF (DEL.GE.0.0) QOSTAR = QIN / 1.0E-10
+         IF (DEL.LT.0.0) QOSTAR = -QIN / 1.0E-10
+      END IF
+C     
+      IF (QOUT.GT.0.0) THEN
+         IF (QOSTAR.EQ.-1.0) QOSTAR = -1.001
+C        
+         DO I = 2, NSLPTS
+            AINF(I) = A(I) / (QOSTAR+1.0)
+            BINF(I) = (A(I)*QOSTAR+B(I)) / (QOSTAR+1.0)
+            CINF(I) = (B(I)*QOSTAR/(QOSTAR+1.0))
+            AINFTC(I) = AINF(I)
+            BINFTC(I) = BINF(I)
+            CINFTC(I) = CINF(I)
+         END DO
+C        
+         QSHEAR = QOUT * RSPACE
+C     
+      ELSE
+C        
+         IF (ABS(QOSTAR).LT.0.00001) QOSTAR = -0.00001
+C        
+         DO I = 2, NSLPTS
+            AINF(I) = A(I) / (QOSTAR)
+            BINF(I) = (A(I)*QOSTAR+B(I)) / (QOSTAR)
+            CINF(I) = B(I)
+            AINFTC(I) = AINF(I)
+            BINFTC(I) = BINF(I)
+            CINFTC(I) = CINF(I)
+         END DO
+C        
+         QSHEAR = QIN * RSPACE
+C     
+      END IF
+C     
+      RETURN
+      END

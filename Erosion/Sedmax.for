@@ -1,0 +1,154 @@
+      SUBROUTINE SEDMAX(JNUM,AMAX,AMIN,PTMAX,PTMIN,DSTOT,STDIST,IBEGIN,
+     1    IEND,JFLAG,LSEG)
+C
+C     + + + PURPOSE + + +
+C     FINDS THE MAXIMUM AND MINIMUM DETACHMENT AND DEPOSITION
+C     FROM SEGMENTS.
+C
+C     CALLED FROM SEDSTA.
+C     AUTHOR(S): D.C. FLANAGAN, J.C. ASCOUGH
+C
+C     VERSION: THIS MODULE MODIFIED FROM WEPP VERSION 2004.7
+C     DATE MODIFIED: 9-30-2004
+C     MODIFIED BY: D. FLANAGAN
+C
+C     + + + ARGUMENT DECLARATIONS + + +
+      INTEGER JNUM, IBEGIN, IEND, JFLAG(100), LSEG
+      REAL AMAX(100), AMIN(100), PTMAX(100), PTMIN(100)
+      REAL DSTOT(1000), STDIST(1000)
+C
+C     + + + ARGUMENT DEFINITIONS + + +
+C     JNUM   - DETACHMENT/DEPOSITION REGION NUMBER
+C     AMAX   - MAXIMUM DETACHMENT/DEPOSITION FOR REGION
+C     AMIN   - MINIMUM DETACHMENT/DEPOSITION FOR REGION
+C     PTMAX  - LOCATION OF MAXIMUM DETACHMENT/DEPOSITION
+C     PTMIN  - LOCATION OF MINIMUM DETACHMENT/DEPOSITION
+C     DSTOT  - SEDIMENT LOSS DOWN PROFILE AT EACH POINT (KG/M^2)
+C     STDIST - DISTANCE DOWN PROFILE AT EACH POINT (M)
+C     IBEGIN - BEGINNING OF DEPOSITION/DETACHMENT SEGMENT
+C     IEND   - END OF DEPOSITION/DETACHMENT SEGMENT
+C     JFLAG  - FLAG FOR WHETHER DEPOSITION OR DETACHMENT OCCURRING
+C     LSEG   - FLAG FOR NUMBER OF DEPOSITION/DETACHMENT SEGMENTS
+C              ON HILLSLOPE PROFILE
+C
+C     + + + LOCAL VARIABLES + + +
+      INTEGER IPTMIN, JPTMIN, IPTMAX, JPTMAX, I
+      REAL CHKVAL
+C
+C     + + + LOCAL DEFINITIONS + + +
+C     IPTMIN - POINT WHERE MIN. IS FIRST ENCOUNTERED
+C     JPTMIN - POINT WHERE MIN. IS LAST ENCOUNTERED
+C     IPTMAX - POINT WHERE MAX. IS FIRST ENCOUNTERED
+C     JPTMAX - POINT WHERE MAX. IS LAST ENCOUNTERED
+C     CHKVAL - AMOUNT 2 NUMBERS MUST DIFFER BY TO BE "DIFFERENT"
+C
+C
+C     + + + END SPECIFICATIONS + + +
+C
+      IPTMIN = IBEGIN
+      IPTMAX = IBEGIN
+      JPTMIN = IBEGIN
+      JPTMAX = IBEGIN
+      AMAX(JNUM) = DSTOT(IBEGIN)
+      PTMAX(JNUM) = STDIST(IBEGIN)
+      AMIN(JNUM) = DSTOT(IBEGIN)
+      PTMIN(JNUM) = STDIST(IBEGIN)
+C     
+      CHKVAL = DSTOT(IBEGIN) * 0.0001
+C     
+C     FOR A SEGMENT WHERE DETACHMENT IS OCCURRING....
+      IF (JFLAG(LSEG).EQ.1) THEN
+C        
+         DO 10 I = IBEGIN + 1, IEND
+C           
+            IF (DSTOT(I).GT.AMAX(JNUM)) THEN
+               IF ((DSTOT(I)-AMAX(JNUM)).GT.CHKVAL) THEN
+                  AMAX(JNUM) = DSTOT(I)
+                  PTMAX(JNUM) = STDIST(I)
+                  IPTMAX = I
+                  JPTMAX = I
+               ELSE
+                  JPTMAX = I
+               END IF
+            END IF
+C           
+C           
+            IF (DSTOT(I).LT.AMIN(JNUM)) THEN
+               IF ((AMIN(JNUM)-DSTOT(I)).GT.CHKVAL) THEN
+                  AMIN(JNUM) = DSTOT(I)
+                  PTMIN(JNUM) = STDIST(I)
+                  IPTMIN = I
+                  JPTMIN = I
+               ELSE
+                  JPTMIN = I
+               END IF
+            END IF
+C        
+   10    CONTINUE
+C        
+         IF (IPTMIN.NE.JPTMIN) THEN
+            I = (IPTMIN+JPTMIN) / 2
+            AMIN(JNUM) = DSTOT(I)
+            PTMIN(JNUM) = STDIST(I)
+         END IF
+C        
+         IF (IPTMAX.NE.JPTMAX) THEN
+            I = (IPTMAX+JPTMAX) / 2
+            AMAX(JNUM) = DSTOT(I)
+            PTMAX(JNUM) = STDIST(I)
+         END IF
+C     
+C     
+C     FOR A SEGMENT WHERE DEPOSITION (NEGATIVE DETACHMENT)
+C     IS OCCURRING....
+C     
+      ELSE IF (JFLAG(LSEG).EQ.0) THEN
+C        
+C        
+         DO 20 I = IBEGIN, IEND
+C           
+            IF (DSTOT(I).LT.AMAX(JNUM)) THEN
+               IF ((AMAX(JNUM)-DSTOT(I)).GT.CHKVAL) THEN
+                  AMAX(JNUM) = DSTOT(I)
+                  PTMAX(JNUM) = STDIST(I)
+                  IPTMAX = I
+                  JPTMAX = I
+               ELSE
+                  JPTMAX = I
+               END IF
+            END IF
+C           
+C           
+            IF (DSTOT(I).GT.AMIN(JNUM)) THEN
+               IF ((DSTOT(I)-AMIN(JNUM)).GT.CHKVAL) THEN
+                  AMIN(JNUM) = DSTOT(I)
+                  PTMIN(JNUM) = STDIST(I)
+                  IPTMIN = I
+                  JPTMIN = I
+               ELSE
+                  JPTMIN = I
+               END IF
+            END IF
+C        
+   20    CONTINUE
+C        
+         IF (IPTMIN.NE.JPTMIN) THEN
+            I = (IPTMIN+JPTMIN) / 2
+            AMIN(JNUM) = DSTOT(I)
+            PTMIN(JNUM) = STDIST(I)
+         END IF
+C        
+         IF (IPTMAX.NE.JPTMAX) THEN
+            I = (IPTMAX+JPTMAX) / 2
+            AMAX(JNUM) = DSTOT(I)
+            PTMAX(JNUM) = STDIST(I)
+         END IF
+C     
+C     
+      ELSE IF (JFLAG(LSEG).EQ.2) THEN
+         IPTMAX = IBEGIN
+         IPTMIN = IBEGIN
+      END IF
+C     
+      RETURN
+      END

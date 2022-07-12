@@ -1,0 +1,100 @@
+      SUBROUTINE ENRPRT(JUN,NPART,FRAC,FRCFLW,DIA,SPG,FRSND,
+     1    FRSLT,FRCLY,FRORG,ENRATO)
+C
+C     + + + PURPOSE + + +
+C     PRINTS OUT THE SEDIMENT SIZE DISTRIBUTION IN RUNOFF
+C     AND THE ENRICHMENT RATIO FOR ALL OVERLAND FLOW ELEMENTS
+C     IN A PROFILE.
+C
+C     CALLED FROM SUBROUTINE SEDOUT
+C     AUTHOR(S): D. FLANAGAN, J. ASCOUGH
+C
+C     VERSION: THIS MODULE TAKEN LARGELY FROM WEPP V2004.7 CODE
+C     DATE CODED: 10-2004
+C     CODED BY: D. FLANAGAN
+C
+C     + + + PARAMETER DECLARATIONS + + +
+C
+      INTEGER MXPART
+      PARAMETER (MXPART = 10)
+C       
+C     + + + ARGUMENT DECLARATIONS + + +
+C
+      INTEGER JUN, NPART
+      REAL FRAC(MXPART), FRCFLW(MXPART), DIA(MXPART), SPG(MXPART),
+     1     FRSND(MXPART), FRSLT(MXPART), FRCLY(MXPART), FRORG(MXPART),
+     1     ENRATO
+C
+C
+C     + + + ARGUMENT DEFINITIONS + + +
+C
+C     JUN  - UNIT NUMBER
+C     NPART  - NUMBER OF PARTICLE SIZE CLASSES
+C     FRAC   - FRACTION OF SEDIMENT IN SIZE CLASS AT POINT OF DETACHMENT
+C     FRCFLW - FRACTION OF SEDIMENT IN SIZE CLASS IN FLOW
+C     DIA    - DIAMETER OF SEDIMENT PARTICLE SIZE CLASS (M)
+C     SPG    - SPECIFIC GRAVITY OF SEDIMENT PARTICLE SIZE CLASS
+C     FRSND  - FRACTION OF SAND IN SIZE CLASS
+C     FRSLT  - FRACTION OF SILT IN SIZE CLASS
+C     FRCLY  - FRACTION OF CLAY IN SIZE CLASS
+C     ENRATO - ENRICHMENT RATIO OF THE SPECIFIC SURFACE AREA
+C
+C     + + + LOCAL VARIABLES + + +
+C
+      REAL FSAND(MXPART), FSILT(MXPART), FCLAY(MXPART), FORG(MXPART), 
+     1     DIAM(MXPART)
+      INTEGER I
+C
+C     + + + LOCAL DEFINITIONS + + +
+C     DIAM  - DIAMETER OF PARTICLE CLASS I IN MM
+C     FSAND - PERCENT OF SAND IN PARTICLE CLASS I
+C     FSILT - PERCENT OF SILT IN PARTICLE CLASS I
+C     FCLAY - PERCENT OF CLAY IN PARTICLE CLASS I
+C     FORG  - PERCENT OF ORGANIC MATTER IN CLASS I
+C     I     - COUNTER VARIABLE USED TO INDICATE PARTICLE CLASS
+C
+C     + + + END SPECIFICATIONS + + +
+C
+C
+      DO 10 I = 1, NPART
+         DIAM(I) = DIA(I) * 1000.
+         FSAND(I) = FRSND(I) * 100.
+         FSILT(I) = FRSLT(I) * 100.
+         FCLAY(I) = FRCLY(I) * 100.
+         FORG(I) = FRORG(I) * 100.
+   10 CONTINUE
+C     
+      WRITE (JUN,1000)
+      DO 20 I = 1, NPART
+         WRITE (JUN,1200) I, DIAM(I), SPG(I), FSAND(I), FSILT(I), 
+     1       FCLAY(I), FORG(I), FRAC(I), FRCFLW(I)
+   20 CONTINUE
+      WRITE (JUN,1100)
+      WRITE (JUN,1300) ENRATO
+      CLOSE (JUN)
+C     
+C     
+C********************************************************************
+C     *
+C     FORMAT STATEMENTS                                             *
+C     *
+C********************************************************************
+C     
+C     
+      RETURN
+ 1000 FORMAT (/5X,'SEDIMENT PARTICLE INFORMATION LEAVING PROFILE',/,
+     1    '-------------------------------------------------------',
+     1    '------------------------',/,
+     1    '                                 PARTICLE COMPOSITION',
+     1    '         DETACHED FRACTION',/,'CLASS  DIAMETER  SPECIFIC  ---
+     1------------------------------','  SEDIMENT  IN FLOW',/,9X,
+     1    '(MM)    GRAVITY   % SAND   % SILT   % CLAY   % O.M.',
+     1    '  FRACTION  EXITING',/,
+     1    '-------------------------------------------------------',
+     1    '------------------------')
+ 1100 FORMAT ('---------------------------------------------------',
+     1    '----------------------------'/)
+ 1200 FORMAT (1X,I2,4X,F6.3,6X,F4.2,4X,F5.1,4X,F5.1,4X,F5.1,4X,F5.1,5X,
+     1    F5.3,4X,F5.3)
+ 1300 FORMAT (/5X,'SSA ENRICHMENT RATIO LEAVING PROFILE = ',F6.2)
+      END
